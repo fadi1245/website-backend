@@ -4,7 +4,6 @@ import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './shared/filters/http-exception.filter';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { connection } from 'mongoose';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -69,8 +68,5 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3000);
   Logger.log(`🚀 App is listening on http://localhost:${process.env.PORT}`, 'Bootstrap');
-  connection.on('error', (err) => {
-    Logger.error(`❌ MongoDB connection error: ${err}`, '', 'Mongoose');
-  });
 }
 bootstrap();  

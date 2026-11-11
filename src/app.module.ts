@@ -5,10 +5,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { envValidationSchema } from './config/env.validation';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
-import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 import multer from 'multer';
 import { MulterModule } from '@nestjs/platform-express';
+import { DataBaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -18,13 +18,9 @@ import { MulterModule } from '@nestjs/platform-express';
       validationSchema: envValidationSchema,
       validationOptions: { abortEarly: true },
     }),
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        uri: config.getOrThrow<string>('DATABASE_URL'),
-      }),
-    }),
+
+    DataBaseModule,
+
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
