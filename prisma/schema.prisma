@@ -1,8 +1,246 @@
+// THIJAR backend: data model (draft for review, not yet migrated)
+//
+// Conventions
+// - Model names are PascalCase, tables and columns are snake_case (@@map / @map).
+// - Ids are UUID strings, so the admin frontend keeps using string ids.
+// - All timestamps are timestamptz (stored in UTC, sent to the frontend as ISO strings).
+// - Files are never stored in the database. Only the S3 object KEY is stored;
+//   the API builds the URL (CloudFront for public files, a short-lived presigned
+//   URL for private files such as CVs).
+// - The generator and datasource blocks are finalised at project setup,
+//   because their exact syntax depends on the Prisma version installed
+//   (Prisma 7 moves the connection URL into prisma.config.ts).
+
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/* ------------------------------------------------------------------ */
+/* Enums (values match the admin frontend's types/admin.ts)            */
+/* ------------------------------------------------------------------ */
+
+enum ContactKind {
+  email
+  phone
+  location
+  other
+}
+
+// Frontend shows labels ("Full-time"); the API sends these values.
+enum EmploymentType {
+  full_time
+  part_time
+  contract
+  internship
+}
+
+enum JobStatus {
+  open
+  closed
+}
+
+enum LeadStatus {
+  new
+  contacted
+  closed
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin accounts and audit trail                                      */
+/* ------------------------------------------------------------------ */
+
+model AdminUser {
+  id           String    @id @default(uuid()) @db.Uuid
+  // Always stored lower-cased by the application so lookups are case-insensitive.
+  email        String    @unique
+  passwordHash String    @map("password_hash") // argon2 hash, never the password
+  name         String?
+  isActive     Boolean   @default(true) @map("is_active")
+  // Increase to invalidate every token issued before (password change, "log out everywhere").
+  tokenVersion Int       @default(0) @map("token_version")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  auditLogs         AuditLog[]
+  pushSubscriptions PushSubscription[]
+
+  @@map("admin_users")
+}
+
+// Who changed what. Never put passwords, tokens or full personal data in `metadata`.
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  adminUserId String?  @map("admin_user_id") @db.Uuid
+  action      String // e.g. "job.create", "lead.delete", "installer.upload", "auth.login"
+  entityType  String   @map("entity_type") // e.g. "job", "lead"
+  entityId    String?  @map("entity_id")
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@index([adminUserId])
+  @@map("audit_logs")
+}
+
+/* ------------------------------------------------------------------ */
+/* Website content                                                     */
+/* ------------------------------------------------------------------ */
+
+model ClientLogo {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  imageKey  String   @map("image_key") // S3 key in the public bucket; API returns imageUrl
+  // For a future drag-to-reorder; for now order by sortOrder, then createdAt.
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Cursor pagination: keyset order (sortOrder, createdAt, id)
+  @@index([sortOrder, createdAt, id])
+  @@map("client_logos")
+}
+
+model ContactInfo {
+  id        String      @id @default(uuid()) @db.Uuid
+  kind      ContactKind
+  label     String
+  value     String
+  sortOrder Int         @default(0) @map("sort_order")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([sortOrder, createdAt, id])
+  @@map("contact_info")
+}
+
+// Every installer upload is kept as a row (version history).
+// At most ONE row has isActive = true; that is the file the website offers.
+// "Remove installer" in the admin = no active row.
+// Enforce "only one active" in the first migration with a raw SQL partial index:
+//   CREATE UNIQUE INDEX product_releases_one_active ON product_releases (is_active) WHERE is_active;
+model ProductRelease {
+  id           String   @id @default(uuid()) @db.Uuid
+  version      String // e.g. "2.4.1"
+  fileName     String   @map("file_name") // original name, e.g. "THIJAR-ERP-Setup.exe"
+  fileKey      String   @map("file_key") // S3 key in the public bucket
+  sizeBytes    Int      @map("size_bytes") // Int is enough for an installer (max about 2 GB)
+  checksumSha256 String? @map("checksum_sha256") // lets visitors verify the download
+  isActive     Boolean  @default(false) @map("is_active")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+
+  @@index([uploadedAt(sort: Desc), id(sort: Desc)])
+  @@map("product_releases")
+}
+
+// Small key-value store for single settings.
+// Used now: key "web_app_url" (the web application link).
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("site_settings")
+}
+
+/* ------------------------------------------------------------------ */
+/* Careers                                                             */
+/* ------------------------------------------------------------------ */
+
+model Job {
+  id             String         @id @default(uuid()) @db.Uuid
+  title          String
+  location       String
+  employmentType EmploymentType @map("employment_type")
+  experience     String // text such as "2-4", shown as "2-4 Years Experience"
+  description    String         @db.Text
+  status         JobStatus      @default(open)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  applications Application[]
+
+  // Cursor pagination: keyset order (createdAt desc, id desc), optionally filtered by status.
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@map("jobs")
+}
+
+model Application {
+  id          String   @id @default(uuid()) @db.Uuid
+  // Null if the job was deleted; jobTitle keeps the title as it was when they applied.
+  jobId       String?  @map("job_id") @db.Uuid
+  jobTitle    String   @map("job_title")
+  name        String
+  email       String
+  phone       String
+  coverNote   String   @default("") @map("cover_note") @db.Text
+  // CVs are personal documents: stored in the PRIVATE bucket, served only to
+  // the logged-in admin through short-lived presigned URLs.
+  cvKey         String @map("cv_key")
+  cvFileName    String @map("cv_file_name")
+  cvContentType String @map("cv_content_type")
+  cvSizeBytes   Int    @map("cv_size_bytes")
+  appliedAt   DateTime @default(now()) @map("applied_at") @db.Timestamptz(3)
+
+  job Job? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  // Cursor pagination: keyset order (appliedAt desc, id desc), optionally filtered by job.
+  @@index([jobId, appliedAt(sort: Desc), id(sort: Desc)])
+  @@index([appliedAt(sort: Desc), id(sort: Desc)])
+  @@map("applications")
+}
+
+/* ------------------------------------------------------------------ */
+/* Leads (Contact us form)                                             */
+/* ------------------------------------------------------------------ */
+
+model Lead {
+  id             String     @id @default(uuid()) @db.Uuid
+  name           String
+  email          String
+  phone          String
+  company        String? // optional on the form
+  service        String? // optional on the form ("service interested in")
+  // Checkbox: consent to be contacted by phone. The time is kept as proof.
+  phoneConsent   Boolean    @default(false) @map("phone_consent")
+  phoneConsentAt DateTime?  @map("phone_consent_at") @db.Timestamptz(3)
+  message        String     @db.Text
+  status         LeadStatus @default(new) // internal tag, never shown on the public site
+  receivedAt     DateTime   @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  // Cursor pagination: keyset order (receivedAt desc, id desc), optionally filtered by status.
+  @@index([status, receivedAt(sort: Desc), id(sort: Desc)])
+  @@index([receivedAt(sort: Desc), id(sort: Desc)])
+  @@map("leads")
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 2: browser push notifications (not migrated until then)       */
+/* ------------------------------------------------------------------ */
+
+model PushSubscription {
+  id          String   @id @default(uuid()) @db.Uuid
+  // The browser's push endpoint. Unique: one row per browser subscription.
+  endpoint    String   @unique @db.Text
+  p256dh      String   @db.Text
+  auth        String   @db.Text
+  // Set for admin alerts. Null = a visitor who opted in to site notifications.
+  adminUserId String?  @map("admin_user_id") @db.Uuid
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@map("push_subscriptions")
 }

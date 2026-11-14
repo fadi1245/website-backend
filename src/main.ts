@@ -4,6 +4,7 @@ import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './shared/filters/http-exception.filter';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { buildValidationException } from './shared/handlers/validation-exception.handler';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -30,6 +31,7 @@ async function bootstrap() {
         const message = constraints ? Object.values(constraints)[0] : 'Bad Request';
         return new BadRequestException(message);
       },
+      // exceptionFactory: buildValidationException
     }),
   );
 

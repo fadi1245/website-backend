@@ -10,4 +10,6 @@ export const envValidationSchema = Joi.object({
     AWS_S3_BUCKETNAME: Joi.string().required(),
     AWS_REGION: Joi.string().required(),
     CORS_ORIGIN: Joi.string().required(),
+    JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).default(3600),
+    SESSION_MAX_HOURS: Joi.number().min(1).default(8),
 });

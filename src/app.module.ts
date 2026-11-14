@@ -9,6 +9,11 @@ import { JwtModule } from '@nestjs/jwt';
 import multer from 'multer';
 import { MulterModule } from '@nestjs/platform-express';
 import { DataBaseModule } from './database/database.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { CoreModule } from './core/core.module';
+import { ContactInfoModule } from './modules/contact-info/contact-info.module';
+import { SharedModule } from './shared/shared.module';
+import { ClientLogosModule } from './modules/client-logos/client-logos.module';
 
 @Module({
   imports: [
@@ -20,6 +25,11 @@ import { DataBaseModule } from './database/database.module';
     }),
 
     DataBaseModule,
+    CoreModule,
+    AuthModule,
+    ContactInfoModule,
+    SharedModule,
+    ClientLogosModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
