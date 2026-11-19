@@ -1,9 +1,11 @@
-import { BadRequestException, Body, Injectable, InternalServerErrorException } from "@nestjs/common";
-import {DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { BadRequestException, Body, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
+import {DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import * as crypto from 'crypto';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Upload } from '@aws-sdk/lib-storage';
 
 import { fileTypeFromBuffer } from 'file-type';
+import { createReadStream } from "fs";
 
 // A signed link stays valid for 7 days, the longest S3 allows for access keys
 const SIGNED_URL_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
@@ -31,19 +33,30 @@ export class S3Service {
         this.bucketName=bucketName;
     }
     
-    private generateImageName(bytes=6):string {
+    private generateFileName(bytes=6):string {
         return `WEB-${crypto.randomBytes(bytes).toString("hex")}`
     }
 
-    async uploadObject(file: Express.Multer.File) {
+    private generateInstallerFileName(): string {
+      return `ERP-${crypto.randomBytes(6).toString('hex')}.exe`;
+    }
+
+    private async validateImage(file: Express.Multer.File){
+      const detectedType = await fileTypeFromBuffer(file.buffer)
+
+      if(!detectedType || !['image/png', 'image/jpeg', 'image/webp' ].includes(detectedType.mime)){
+        throw new BadRequestException("Unsupported image format")
+      }
+      return detectedType
+    }
+
+    async uploadImage(file: Express.Multer.File) {
         if(!file||!file.buffer||!file.mimetype){
             throw new BadRequestException("Invalid File Input"); 
         }
-        const detectedType = await fileTypeFromBuffer(file.buffer);
-        if(!detectedType || !['image/png', 'image/jpeg', 'image/webp' ].includes(detectedType.mime)){
-            throw new BadRequestException("Unsupported image Format")
-        }
-        const imageName = this.generateImageName()
+        const detectedType = await this.validateImage(file)
+
+        const imageName = this.generateFileName()
         const params = {
             Bucket: this.bucketName,
             Key: imageName,
@@ -61,15 +74,9 @@ export class S3Service {
         }
     }
 
-    /**
-     * Temporary link that lets a browser read one private file.
-     * The link is signed with the start of today (UTC) instead of the current moment,
-     * so every call during the same day returns the SAME link. That lets browsers
-     * keep the image in their cache instead of downloading it again each time.
-     */
     async getSignedUrlObject(key: string): Promise<string> {
         if (!key) {
-          throw new InternalServerErrorException('No image key provided');
+          throw new BadRequestException('No image key provided');
         }
     
         const params = {
@@ -77,20 +84,18 @@ export class S3Service {
           Key: key,
         };
 
-        const signingDate = new Date();
-        signingDate.setUTCHours(0, 0, 0, 0);
     
         try {
           const command = new GetObjectCommand(params);
           return await getSignedUrl(this.s3Client, command, {
             expiresIn: SIGNED_URL_EXPIRY_SECONDS,
-            signingDate,
           });
         } catch (error) {
           console.error('Signed URL Error:', error instanceof Error ? error.message : error);
           throw new InternalServerErrorException('Could not generate signed URL');
         }
       }
+
 
       async deleteObject(key:string): Promise<void> {
         if (!key) {
@@ -109,5 +114,52 @@ export class S3Service {
             console.error('Object Delete Error', error instanceof Error ? error.message : error);
             throw new InternalServerErrorException('Could not delete file from s3');
           }
+      }
+
+
+      async uploadInstallerFromDisk(filePath: string): Promise<string> {
+        const fileKey = this.generateInstallerFileName();
+      
+        const upload = new Upload({
+          client: this.s3Client,
+          params: {
+            Bucket: this.bucketName,
+            Key: fileKey,
+            Body: createReadStream(filePath),
+            ContentType: 'application/vnd.microsoft.portable-executable',
+            ContentDisposition: 'attachment; filename="ERP-Setup.exe"',
+          },
+          leavePartsOnError:false
+        });
+      
+        try {
+          await upload.done();
+          return fileKey;
+        } catch (error) {
+          console.error('S3 installer upload error:', error);
+          throw new InternalServerErrorException('Failed to upload installer to S3');
+        }
+      }
+
+      async getInstallerDownloadUrl(key: string): Promise<string> {
+        if (!key) {
+          throw new BadRequestException('No installer key provided');
+        }
+      
+        try {
+          const command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
+          });
+      
+          return await getSignedUrl(this.s3Client, command, {
+            expiresIn: 5 * 60,
+          });
+        } catch (error) {
+          console.error('Installer download URL error:', error);
+          throw new InternalServerErrorException(
+            'Could not generate installer download URL',
+          );
+        }
       }
 }

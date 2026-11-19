@@ -128,18 +128,18 @@ model ContactInfo {
 // "Remove installer" in the admin = no active row.
 // Enforce "only one active" in the first migration with a raw SQL partial index:
 //   CREATE UNIQUE INDEX product_releases_one_active ON product_releases (is_active) WHERE is_active;
-model ProductRelease {
+model ERPInstallerRelease {
   id           String   @id @default(uuid()) @db.Uuid
   version      String // e.g. "2.4.1"
   fileName     String   @map("file_name") // original name, e.g. "THIJAR-ERP-Setup.exe"
-  fileKey      String   @map("file_key") // S3 key in the public bucket
+  fileKey      String @unique   @map("file_key") // S3 key in the public bucket
   sizeBytes    Int      @map("size_bytes") // Int is enough for an installer (max about 2 GB)
   checksumSha256 String? @map("checksum_sha256") // lets visitors verify the download
   isActive     Boolean  @default(false) @map("is_active")
   uploadedAt   DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
 
   @@index([uploadedAt(sort: Desc), id(sort: Desc)])
-  @@map("product_releases")
+  @@map("erp_installer_releases")
 }
 
 // Small key-value store for single settings.

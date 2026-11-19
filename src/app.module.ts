@@ -14,6 +14,7 @@ import { CoreModule } from './core/core.module';
 import { ContactInfoModule } from './modules/contact-info/contact-info.module';
 import { SharedModule } from './shared/shared.module';
 import { ClientLogosModule } from './modules/client-logos/client-logos.module';
+import { ErpDetailsrModule } from './modules/erp-details/erp-details.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ClientLogosModule } from './modules/client-logos/client-logos.module';
     ContactInfoModule,
     SharedModule,
     ClientLogosModule,
+    ErpDetailsrModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

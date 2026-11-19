@@ -63,7 +63,7 @@ async function bootstrap() {
       swaggerOptions: {
         persistAuthorization: true, // ✅ keeps token after refresh
       },
-      customSiteTitle: 'Thijar Currency Monitor Docs',
+      customSiteTitle: 'Thijar Website Docs',
     });
     Logger.log(`📄 Swagger docs at http://localhost:${process.env.PORT}/docs`);
   }
