@@ -162,4 +162,79 @@ export class S3Service {
           );
         }
       }
+
+      private async validatePdf(file: Express.Multer.File) {
+        if (!file?.buffer || !file.originalname) {
+          throw new BadRequestException('Invalid PDF file');
+        }
+      
+        const detectedType = await fileTypeFromBuffer(file.buffer);
+      
+        if (
+          !detectedType ||
+          detectedType.mime !== 'application/pdf' ||
+          !file.originalname.toLowerCase().endsWith('.pdf')
+        ) {
+          throw new BadRequestException('Only PDF files are allowed');
+        }
+      
+        return detectedType;
+      }
+
+      async uploadApplicationCv(file: Express.Multer.File) {
+        const detectedType = await this.validatePdf(file);
+      
+        const cvKey = `job-applications/APP-${crypto
+          .randomBytes(8)
+          .toString('hex')}.pdf`;
+      
+        try {
+          await this.s3Client.send(
+            new PutObjectCommand({
+              Bucket: this.bucketName,
+              Key: cvKey,
+              Body: file.buffer,
+              ContentType: detectedType.mime,
+              ContentDisposition: 'attachment',
+            }),
+          );
+      
+          return {
+            cvKey,
+            cvFileName: file.originalname,
+            cvContentType: detectedType.mime,
+            cvSizeBytes: file.buffer.length,
+          };
+        } catch (error) {
+          console.error('Application CV upload error:', error);
+      
+          throw new InternalServerErrorException(
+            'Failed to upload application CV',
+          );
+        }
+      }
+
+      async getApplicationCvUrl(key: string): Promise<string> {
+        if (!key || !key.startsWith('job-applications/')) {
+          throw new BadRequestException('Invalid application CV key');
+        }
+      
+        try {
+          const command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
+            ResponseContentDisposition: 'attachment',
+          });
+      
+          return await getSignedUrl(this.s3Client, command, {
+            expiresIn: 5 * 60,
+          });
+        } catch (error) {
+          console.error('Application CV signed URL error:', error);
+      
+          throw new InternalServerErrorException(
+            'Could not generate application CV URL',
+          );
+        }
+      }
 }

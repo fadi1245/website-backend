@@ -16,6 +16,7 @@ import { SharedModule } from './shared/shared.module';
 import { ClientLogosModule } from './modules/client-logos/client-logos.module';
 import { ErpDetailsrModule } from './modules/erp-details/erp-details.module';
 import { JobListingModule } from './modules/job-listing/Job-lsiting.module';
+import { JobApplicationModule } from './modules/job-applicaiton/job-application.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { JobListingModule } from './modules/job-listing/Job-lsiting.module';
     ClientLogosModule,
     ErpDetailsrModule,
     JobListingModule,
+    JobApplicationModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
