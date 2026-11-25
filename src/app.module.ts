@@ -17,6 +17,7 @@ import { ClientLogosModule } from './modules/client-logos/client-logos.module';
 import { ErpDetailsrModule } from './modules/erp-details/erp-details.module';
 import { JobListingModule } from './modules/job-listing/Job-lsiting.module';
 import { JobApplicationModule } from './modules/job-applicaiton/job-application.module';
+import { LeadsModule } from './modules/leads/leads.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { JobApplicationModule } from './modules/job-applicaiton/job-application.
     ErpDetailsrModule,
     JobListingModule,
     JobApplicationModule,
+    LeadsModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

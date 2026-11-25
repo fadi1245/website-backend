@@ -207,18 +207,17 @@ model Application {
 model Lead {
   id             String     @id @default(uuid()) @db.Uuid
   name           String
-  email          String
-  phone          String
-  company        String? // optional on the form
-  service        String? // optional on the form ("service interested in")
-  // Checkbox: consent to be contacted by phone. The time is kept as proof.
+  email          String?
+  phone          String?
+  company        String?
+  service        String
   phoneConsent   Boolean    @default(false) @map("phone_consent")
   phoneConsentAt DateTime?  @map("phone_consent_at") @db.Timestamptz(3)
-  message        String     @db.Text
-  status         LeadStatus @default(new) // internal tag, never shown on the public site
+  message        String?    @db.Text
+  status         LeadStatus @default(new)
   receivedAt     DateTime   @default(now()) @map("received_at") @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  // Cursor pagination: keyset order (receivedAt desc, id desc), optionally filtered by status.
   @@index([status, receivedAt(sort: Desc), id(sort: Desc)])
   @@index([receivedAt(sort: Desc), id(sort: Desc)])
   @@map("leads")
