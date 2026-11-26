@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, InternalServerErrorException, NotFound
 import { PrismaService } from "src/database/prisma.service";
 import { PaginationService, SortField } from "src/shared/utils/pagination.service";
 import { CreateLeadsDto, CreateLeadsResponseDataDto, CreateLeadsResponseDto, LeadsQueryDto, UpdateLeadsDto } from "./dtos/leads.dto";
+import { EmailService } from "src/shared/email/email.service";
 
 const LEADS_ORDER: SortField[] = [
     {field:'receivedAt', direction:'desc', type:'date'},
@@ -13,6 +14,7 @@ export class LeadsService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly pagination: PaginationService,
+        private readonly emailService: EmailService
     ) {}
 
     async createLeads(dto:CreateLeadsDto):Promise<CreateLeadsResponseDto>{
@@ -42,6 +44,14 @@ export class LeadsService {
                     receivedAt:true
                 }
             })
+            try {
+              await this.emailService.sendLeadNotification(created);
+            } catch (emailError) {
+              console.error(
+                'Lead saved, but notification email failed:',
+                emailError,
+              );
+            }
             return{
                 message:"Lead added successfully",
                 created
