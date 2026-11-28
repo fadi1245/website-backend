@@ -20,9 +20,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* ------------------------------------------------------------------ */
-/* Enums (values match the admin frontend's types/admin.ts)            */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Enums (values match the admin frontend's types/admin.ts)
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 enum ContactKind {
   email
@@ -50,9 +56,15 @@ enum LeadStatus {
   closed
 }
 
-/* ------------------------------------------------------------------ */
-/* Admin accounts and audit trail                                      */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Admin accounts and audit trail
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model AdminUser {
   id           String    @id @default(uuid()) @db.Uuid
@@ -69,6 +81,7 @@ model AdminUser {
 
   auditLogs         AuditLog[]
   pushSubscriptions PushSubscription[]
+  pushNotifications PushNotification[]
 
   @@map("admin_users")
 }
@@ -92,9 +105,15 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-/* ------------------------------------------------------------------ */
-/* Website content                                                     */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Website content
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model ClientLogo {
   id        String   @id @default(uuid()) @db.Uuid
@@ -129,14 +148,13 @@ model ContactInfo {
 // Enforce "only one active" in the first migration with a raw SQL partial index:
 //   CREATE UNIQUE INDEX product_releases_one_active ON product_releases (is_active) WHERE is_active;
 model ERPInstallerRelease {
-  id           String   @id @default(uuid()) @db.Uuid
-  version      String // e.g. "2.4.1"
-  fileName     String   @map("file_name") // original name, e.g. "THIJAR-ERP-Setup.exe"
-  fileKey      String @unique   @map("file_key") // S3 key in the public bucket
-  sizeBytes    Int      @map("size_bytes") // Int is enough for an installer (max about 2 GB)
-  checksumSha256 String? @map("checksum_sha256") // lets visitors verify the download
-  isActive     Boolean  @default(false) @map("is_active")
-  uploadedAt   DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  id             String   @id @default(uuid()) @db.Uuid
+  version        String
+  fileName       String   @map("file_name")
+  fileKey        String   @unique @map("file_key")
+  sizeBytes      Int      @map("size_bytes")
+  checksumSha256 String?  @map("checksum_sha256")
+  uploadedAt     DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
 
   @@index([uploadedAt(sort: Desc), id(sort: Desc)])
   @@map("erp_installer_releases")
@@ -152,9 +170,15 @@ model SiteSetting {
   @@map("site_settings")
 }
 
-/* ------------------------------------------------------------------ */
-/* Careers                                                             */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Careers
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Job {
   id             String         @id @default(uuid()) @db.Uuid
@@ -176,21 +200,21 @@ model Job {
 }
 
 model Application {
-  id          String   @id @default(uuid()) @db.Uuid
+  id            String   @id @default(uuid()) @db.Uuid
   // Null if the job was deleted; jobTitle keeps the title as it was when they applied.
-  jobId       String?  @map("job_id") @db.Uuid
-  jobTitle    String   @map("job_title")
-  name        String
-  email       String
-  phone       String
-  coverNote   String   @default("") @map("cover_note") @db.Text
+  jobId         String?  @map("job_id") @db.Uuid
+  jobTitle      String   @map("job_title")
+  name          String
+  email         String
+  phone         String
+  coverNote     String   @default("") @map("cover_note") @db.Text
   // CVs are personal documents: stored in the PRIVATE bucket, served only to
   // the logged-in admin through short-lived presigned URLs.
-  cvKey         String @map("cv_key")
-  cvFileName    String @map("cv_file_name")
-  cvContentType String @map("cv_content_type")
-  cvSizeBytes   Int    @map("cv_size_bytes")
-  appliedAt   DateTime @default(now()) @map("applied_at") @db.Timestamptz(3)
+  cvKey         String   @map("cv_key")
+  cvFileName    String   @map("cv_file_name")
+  cvContentType String   @map("cv_content_type")
+  cvSizeBytes   Int      @map("cv_size_bytes")
+  appliedAt     DateTime @default(now()) @map("applied_at") @db.Timestamptz(3)
 
   job Job? @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
@@ -200,9 +224,15 @@ model Application {
   @@map("applications")
 }
 
-/* ------------------------------------------------------------------ */
-/* Leads (Contact us form)                                             */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Leads (Contact us form)
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Lead {
   id             String     @id @default(uuid()) @db.Uuid
@@ -223,9 +253,15 @@ model Lead {
   @@map("leads")
 }
 
-/* ------------------------------------------------------------------ */
-/* Phase 2: browser push notifications (not migrated until then)       */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Phase 2: browser push notifications (not migrated until then)
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model PushSubscription {
   id          String   @id @default(uuid()) @db.Uuid
@@ -242,4 +278,40 @@ model PushSubscription {
 
   @@index([adminUserId])
   @@map("push_subscriptions")
+}
+
+model PushNotification {
+  id       String                   @id @default(uuid()) @db.Uuid
+  title    String
+  message  String                   @db.Text
+  url      String?
+  category PushNotificationCategory
+  status   PushNotificationStatus   @default(pending)
+
+  oneSignalId String? @unique @map("one_signal_id")
+
+  sentById String?    @map("sent_by_id") @db.Uuid
+  sentBy   AdminUser? @relation(fields: [sentById], references: [id], onDelete: SetNull)
+
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([sentById])
+  @@map("push_notifications")
+}
+
+enum PushNotificationCategory {
+  announcement
+  job_vacancy
+  product_update
+}
+
+enum PushNotificationStatus {
+  pending
+  sending
+  sent
+  failed
 }

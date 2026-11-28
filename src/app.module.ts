@@ -18,6 +18,7 @@ import { ErpDetailsrModule } from './modules/erp-details/erp-details.module';
 import { JobListingModule } from './modules/job-listing/Job-lsiting.module';
 import { JobApplicationModule } from './modules/job-applicaiton/job-application.module';
 import { LeadsModule } from './modules/leads/leads.module';
+import { PushNotificationsModule } from './modules/push-notification/push-nofification.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { LeadsModule } from './modules/leads/leads.module';
     JobListingModule,
     JobApplicationModule,
     LeadsModule,
+    PushNotificationsModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -58,7 +58,7 @@ export class LeadsService {
             }
         }
         catch(error){
-            console.error('Failed to create job listing:', error);
+            console.error('Failed to create Leads:', error);
 
             throw new InternalServerErrorException(
               'Failed to create job listing',

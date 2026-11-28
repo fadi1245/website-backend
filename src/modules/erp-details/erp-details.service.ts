@@ -32,7 +32,6 @@ export class ErpDetailsService {
           fileKey,
           sizeBytes: validationResult.sizeBytes,
           checksumSha256: validationResult.checksumSha256,
-          isActive: false,
         },
       });
 
@@ -79,33 +78,29 @@ export class ErpDetailsService {
         fileKey: true,
       },
     });
-
+  
     if (!installer) {
       throw new NotFoundException('Installer not found');
     }
-
-    // 1. Delete installer from S3
-    await this.s3Service.deleteObject(installer.fileKey);
-
-    // 2. Delete installer record from PostgreSQL
+  
+    // 1. Delete installer record from PostgreSQL
+    await this.prisma.eRPInstallerRelease.delete({
+      where: {
+        id: installer.id,
+      },
+    });
+  
+    // 2. Delete installer file from S3
     try {
-      await this.prisma.eRPInstallerRelease.delete({
-        where: {
-          id: installer.id,
-        },
-      });
+      await this.s3Service.deleteObject(installer.fileKey);
     } catch (error) {
       console.error(
-        'S3 object deleted, but PostgreSQL installer record deletion failed:',
-        installer.id,
+        'Installer record deleted, but S3 file cleanup failed:',
+        installer.fileKey,
         error,
       );
-
-      throw new InternalServerErrorException(
-        'Installer file was deleted from storage, but its database record could not be deleted',
-      );
     }
-
+  
     return {
       message: 'Installer deleted successfully',
     };
